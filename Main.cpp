@@ -1,6 +1,8 @@
 #include "Data.h"
 #include "Histogram.h"
 #include "Tree.h"
+#include <limits>
+#include <cstddef>
 
 #ifndef HEADERS
 
@@ -15,6 +17,11 @@
 #include "time.h"
 
 #endif
+
+
+#define ENTROPY_PRUNING
+#define DIST_PRUNING
+
 
 using namespace std;
 
@@ -61,10 +68,14 @@ double SubsequenceDist(vector<double> T, vector<double> S, int l, double min_dis
 		double S_val = S[i];
 		double T_val = T[i+l];
 		dist += (S_val-T_val)*(S_val-T_val);
+
+#ifdef DIST_PRUNING
 		if(min_dist>0 && dist>min_dist){
-			dist = 10000000;
+			dist = numeric_limits<double>::max();
 			break;
 		}
+#endif
+
 	}
 
 	return dist;
@@ -149,6 +160,8 @@ double CalculateInfoGain(Histogram* hist, int a_total, int b_total){
 	
 }
 
+
+
 bool HistogramPruning(Histogram* hist, double max_gain, int a_total, int b_total){
 	list<HistData>::iterator it = hist->data.begin();
 
@@ -195,14 +208,6 @@ bool HistogramPruning(Histogram* hist, double max_gain, int a_total, int b_total
 		h1.insert(1, max_d);
 		h2.insert(1, min_d);
 	}
-
-	//cout<<a_num<<" "<<b_num<<endl;
-	
-	// cout<<"h1 :"<<endl;
-	// h1.print();
-	
-	// cout<<"h2 :"<<endl;
-	// h2.print();
 		
 
 	if(CalculateInfoGain(&h1, a_total, b_total)>max_gain){
@@ -226,8 +231,12 @@ double CheckCandidate(vector<double> S, double max_gain, vector<Data>* dataVecto
 	for(int i=0; i<dataVector->size(); i++){
 		double distance = SubsequenceDist((*dataVector)[i].data, S);
 		hist.insert((*dataVector)[i].type, distance);
+
+#ifdef ENTROPY_PRUNING
 		if(HistogramPruning(&hist, max_gain, a_total, b_total)==true)
 		  	return -1;
+#endif
+
 	}
 	return CalculateInfoGain(&hist, a_total, b_total);
 }
@@ -341,14 +350,12 @@ void FindingShapeleteBF(vector<Data>* dataVector, Node* node){
 			b_total++;
 	}
 
-	clock_t before;
 
 	double gain = 0;
 	int shapelet_k;
 	int shapelet_i;
 	int shapelet_j;
 
-	before = clock();
 
 
 	//get candidate
@@ -381,10 +388,6 @@ void FindingShapeleteBF(vector<Data>* dataVector, Node* node){
 	}
 	cout<<"SHAPLET is " <<shapelet_k<<" "<<shapelet_i<<" "<<shapelet_j<<endl;
 
-	//GET TIME
-	double result = (double)(clock()-before)/CLOCKS_PER_SEC;
-	cout<<"Time = "<<result<<endl;
-
 	SetShapelet(shapelet_k, shapelet_i, shapelet_j, dataVector, a_total, b_total, node);
 
 
@@ -407,6 +410,9 @@ void FindingShapeleteBF(vector<Data>* dataVector, Node* node){
 
 	// cout<<isDataVectorPure(dataVector_left, node->left_type)<<endl;
 	// cout<<isDataVectorPure(dataVector_right, node->right_type)<<endl;
+
+
+
 	cout<<"_________________________________________________"<<endl;
 	cout<<endl;
 
@@ -497,7 +503,10 @@ double GetAccuracy(vector <Data>* dataVector2){
 
 
 int main(){
-	//	cout<<"H"<<endl;
+
+	clock_t before;
+
+	before = clock();
 
 	vector <Data> dataVector;
  	ifstream inFile;
@@ -521,30 +530,31 @@ int main(){
 
 	
 
-
-	// dataVector[0].print();
-	// dataVector[1].print();
-	// dataVector[2].print();
-
-	//Normalize(&dataVector);
-
-	// dataVector[0].print();
-	// dataVector[1].print();
-	// dataVector[2].print();
-
+	Normalize(&dataVector);
 
 	FindingShapeleteBF(&dataVector, &tree);
 
-	cout<<endl;
-	cout<<endl;
-	cout<<"_________________________________________________"<<endl;
-	cout<<"______________________TREE_______________________"<<endl;
-	tree.print_nodes();
 
-	cout<<"_________________________________________________"<<endl;
-	cout<<"_________________________________________________"<<endl;
-	cout<<endl;
-	cout<<endl;
+	//GET TIME
+	double result = (double)(clock()-before)/CLOCKS_PER_SEC;
+	cout<<"Time = "<<result<<endl;
+
+
+	// cout<<endl;
+	// cout<<endl;
+	// cout<<"_________________________________________________"<<endl;
+	// cout<<"______________________TREE_______________________"<<endl;
+	
+	ofstream outFile("output_no_pruning.txt");
+	tree.print_nodes(&outFile);
+
+	// cout<<"_________________________________________________"<<endl;
+	// cout<<"_________________________________________________"<<endl;
+	// cout<<endl;
+	// cout<<endl;
+
+
+
 	/////////TESTING//////////
 	
 	vector <Data> dataVector2;	
@@ -569,7 +579,7 @@ int main(){
 	}
 
 
-	//Normalize(&dataVector2);
+	Normalize(&dataVector2);
 
 	ClassifyTestSet(&dataVector2, &tree);
 	cout<<"The Accuracy of this Algorithm is : "<<GetAccuracy(&dataVector2)<<"%"<<endl;
